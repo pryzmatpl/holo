@@ -166,7 +166,7 @@ int main(int argc, char** argv) {
     //--------------------------------------------------------------------------
     // Step 1: Filter the real-valued input image.
     //--------------------------------------------------------------------------
-    eitHolo.holoeye_filter(padded, {});
+    eitHolo.holoeye_filter(padded, opts.filImage);
 
     //--------------------------------------------------------------------------
     // Step 2: Add a reference wave to the input.
@@ -176,7 +176,7 @@ int main(int argc, char** argv) {
     //--------------------------------------------------------------------------
     // Step 3: Filter the complex image (with phase-only reference).
     //--------------------------------------------------------------------------
-    eitHolo.holoeye_filter(padded, {});
+    eitHolo.holoeye_filter(padded, opts.filCImage);
 
     //--------------------------------------------------------------------------
     // Step 4: Perform the transform.
@@ -185,13 +185,13 @@ int main(int argc, char** argv) {
         Gerch(padded, intensity);
     } else {
         Mat adft_data;
-        eitHolo.holoeye_transform(padded, adft_data, {});
+        eitHolo.holoeye_transform(padded, adft_data, opts.hologramType);
     }
 
     //--------------------------------------------------------------------------
     // Step 5: Filter the FFT of the image.
     //--------------------------------------------------------------------------
-    eitHolo.holoeye_filter(padded, {});
+    eitHolo.holoeye_filter(padded, opts.filAfft);
 
     //--------------------------------------------------------------------------
     // Step 6: Tile the phase image to full HD resolution.
@@ -203,7 +203,7 @@ int main(int argc, char** argv) {
     //--------------------------------------------------------------------------
     // Step 7: Filter the tiled image.
     //--------------------------------------------------------------------------
-    eitHolo.holoeye_filter(finalres, {});
+    eitHolo.holoeye_filter(finalres, opts.filOut);
 
     // Set up the zoom trackbar.
     ZoomData zoomData;
