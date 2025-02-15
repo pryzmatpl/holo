@@ -5,6 +5,13 @@ project(holo)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+set(JAVA_HOME "/usr/lib/jvm/java-23-openjdk")
+set(JAVA_AWT_LIBRARY "${JAVA_HOME}/lib/libjawt.so")
+set(JAVA_JVM_LIBRARY "${JAVA_HOME}/lib/server/libjvm.so")
+set(JAVA_INCLUDE_PATH "${JAVA_HOME}/include")
+set(JAVA_INCLUDE_PATH2 "${JAVA_HOME}/include/linux")
+set(JAVA_AWT_INCLUDE_PATH "${JAVA_HOME}/include")
+
 # Boost configuration
 set(Boost_USE_STATIC_LIBS OFF)
 set(Boost_USE_MULTITHREADED ON)
