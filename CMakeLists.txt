@@ -39,7 +39,7 @@ endif()
 list(APPEND CMAKE_PREFIX_PATH ${CLI11_DIR})
 
 # Find required packages
-find_package(Boost 1.55.0 REQUIRED COMPONENTS system thread iostreams program_options)
+find_package(Boost 1.86.0 REQUIRED COMPONENTS system thread iostreams program_options)
 find_package(OpenCV 4.11.0 REQUIRED)
 find_package(GSL REQUIRED)
 find_package(GTest REQUIRED)
