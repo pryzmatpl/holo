@@ -5,6 +5,7 @@ project(holo)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Java settings (if needed)
 set(JAVA_HOME "/usr/lib/jvm/java-23-openjdk")
 set(JAVA_AWT_LIBRARY "${JAVA_HOME}/lib/libjawt.so")
 set(JAVA_JVM_LIBRARY "${JAVA_HOME}/lib/server/libjvm.so")
@@ -17,13 +18,14 @@ set(Boost_USE_STATIC_LIBS OFF)
 set(Boost_USE_MULTITHREADED ON)
 set(Boost_USE_STATIC_RUNTIME OFF)
 
-# Add our custom modules paths
+# Add custom module paths
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
+# VTK settings
 set(VTK_WRAP_JAVA OFF CACHE BOOL "Turn off VTK Java wrapping")
 set(VTK_JAVA_INSTALL OFF CACHE BOOL "Turn off VTK Java installation")
 
-# Fetch CLI11 first
+# Fetch CLI11
 include(FetchContent)
 FetchContent_Declare(
         CLI11
@@ -43,7 +45,7 @@ if(VTK_FOUND)
     include(${VTK_USE_FILE})
 endif()
 
-# Include directories
+# Set include directories
 set(INC_OWN "${CMAKE_SOURCE_DIR}/include")
 include_directories(${INC_OWN})
 include_directories(${Boost_INCLUDE_DIRS})
@@ -51,8 +53,17 @@ include_directories(${GSL_INCLUDE_DIRS})
 include_directories(${GTEST_INCLUDE_DIRS})
 include_directories(${cli11_SOURCE_DIR}/include)
 
-# Set additional compiler flags
+# Set additional compiler flags (removing invalid ones)
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O3 -Wreturn-type -D__extern_always_inline=inline")
+
+# Create an extra variable for Boost.Program_options
+if(Boost_PROGRAM_OPTIONS_LIBRARY)
+    message(STATUS "Using Boost.Program_options library: ${Boost_PROGRAM_OPTIONS_LIBRARY}")
+    set(EXTRA_BOOST_LIBS ${Boost_PROGRAM_OPTIONS_LIBRARY})
+else()
+    message(STATUS "Boost_PROGRAM_OPTIONS_LIBRARY not set; assuming it is in Boost_LIBRARIES")
+    set(EXTRA_BOOST_LIBS "")
+endif()
 
 # Main executables
 add_executable(holo
@@ -71,9 +82,9 @@ add_executable(holorunner
         src/filters.cpp
 )
 
-# Note: Removed CLI11::CLI11 from target_link_libraries since we're using include_directories
 target_link_libraries(holo
         ${Boost_LIBRARIES}
+        ${EXTRA_BOOST_LIBS}
         ${OpenCV_LIBS}
         ${GSL_LIBRARIES}
         ${VTK_LIBRARIES}
@@ -81,6 +92,7 @@ target_link_libraries(holo
 
 target_link_libraries(holorunner
         ${Boost_LIBRARIES}
+        ${EXTRA_BOOST_LIBS}
         ${OpenCV_LIBS}
         ${VTK_LIBRARIES}
 )
@@ -101,6 +113,7 @@ if(TEST_SOURCES)
             ${GTEST_LIBRARIES}
             ${GTEST_MAIN_LIBRARIES}
             ${Boost_LIBRARIES}
+            ${EXTRA_BOOST_LIBS}
             ${OpenCV_LIBS}
             ${VTK_LIBRARIES}
     )
