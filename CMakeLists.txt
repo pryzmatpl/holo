@@ -73,6 +73,7 @@ add_executable(holo
         src/filters.cpp
         src/gerch.cpp
         include/optimize.hpp
+        src/global.cpp
 )
 
 add_executable(holorunner
@@ -80,6 +81,7 @@ add_executable(holorunner
         src/reference.cpp
         src/fft.cpp
         src/filters.cpp
+        src/global.cpp
 )
 
 target_link_libraries(holo

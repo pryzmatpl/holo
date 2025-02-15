@@ -11,7 +11,7 @@ namespace po = boost::program_options;
 typedef boost::char_separator<char> separator_type;
 
 // Global variables (if required by the application)
-float glob_distance;
+extern float glob_distance;
 int zoom;
 const int zoommax = 100;
 bool flipzero;

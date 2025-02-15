@@ -20,7 +20,7 @@
 // External globals (defined elsewhere in your project)
 extern float wavelength; // TODO: rework global if possible
 extern float glob_distance;
-float frft_angle; // Global fractional FT angle
+extern float frft_angle; // Global fractional FT angle
 
 // -----------------------------------------------------------------------------
 // Global operator overloads for cv::Mat and std::complex<float>

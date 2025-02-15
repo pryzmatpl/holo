@@ -5,12 +5,11 @@ using namespace cv;
 namespace po = boost::program_options;
 
 // Global variables that are still used externally.
-float glob_distance = 1;
-float wavelength = 632.8e-9;
 int zoom = 1;
 const int zoommax = 1000;
 Mat backup__;
 extern float frft_angle;  // Defined elsewhere (e.g., in one of the EIT modules)
+extern float wavelength;
 
 //------------------------------------------------------------------------------
 // Structure to hold command line parameters
