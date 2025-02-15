@@ -34,7 +34,7 @@ To build and run Holo, ensure you have the following dependencies installed:
 ## Directory Structure
 
 ```
-HoloBo/
+Holo/
 ├── assets/         # Additional assets for testing
 ├── cmake/          # CMake configuration files
 ├── include/        # Header files for FFT, filtering, etc.
@@ -50,7 +50,7 @@ HoloBo/
 
 ## Compilation and Installation
 
-To compile HoloBo, follow these steps:
+To compile Holo, follow these steps:
 
 ```sh
 mkdir build && cd build
@@ -60,7 +60,7 @@ make -j$(nproc)
 
 This will generate the following binaries:
 
-- **holobo** - Main hologram generation executable
+- **holo** - Main hologram generation executable
 - **holorunner** - Test runner for alternating phase images
 
 ## Usage
@@ -68,7 +68,7 @@ This will generate the following binaries:
 Run the program with:
 
 ```sh
-./holobo --image <input_image> --distance <float> --type <FRESNEL/RPN/FFT>
+./holo --image <input_image> --distance <float> --type <FRESNEL/RPN/FFT>
 ```
 
 ### Command-Line Options
@@ -91,7 +91,7 @@ Run the program with:
 To generate a hologram using a Fresnel transformation:
 
 ```sh
-./holobo --image sample.jpg --distance 1.5 --type FRESNEL --refwave REF
+./holo --image sample.jpg --distance 1.5 --type FRESNEL --refwave REF
 ```
 
 To alternate images using `holorunner`:
