@@ -4,323 +4,260 @@ using namespace std;
 using namespace cv;
 namespace po = boost::program_options;
 
-float glob_distance=1;
-float wavelength=632.8e-9;
-int zoom=1;
-const int zoommax=1000;
+// Global variables that are still used externally.
+float glob_distance = 1;
+float wavelength = 632.8e-9;
+int zoom = 1;
+const int zoommax = 1000;
 Mat backup__;
-extern float frft_angle;
+extern float frft_angle;  // Defined elsewhere (e.g., in one of the EIT modules)
 
-void onzoom(int trackposition, void* userdata){
-  glob_distance = ((float)trackposition/(float)zoommax)*(float)zoommax;
-  eit_hologram eit_holo;
-  Mat& indata = reinterpret_cast<Mat&>(*userdata);
-
-  indata.copyTo(backup__);
-  backup__ = eit_holo.holoeye_filter(backup__,"SINC");
-  backup__ = eit_holo.tile_to_fhd(backup__);
-  imshow("Output - tiled", backup__);
+//------------------------------------------------------------------------------
+// Structure to hold command line parameters
+//------------------------------------------------------------------------------
+struct Options {
+    string imageFilename = "_logo.jpg";
+    float distance = 1.0f;
+    float wavelength = 632.8e-9;
+    string hologramType = "FRESNEL";
+    string filImage = "NONE";
+    string filCImage = "";
+    string filAfft = "";
+    string filOut = "";
+    string refWave = "";
+    bool gerchOn = true;
+    string chirp = "";
+    bool genTwo = false;
+    float frftAngle = static_cast<float>(CV_PI / 2); // Using OpenCV's CV_PI constant
 };
 
-inline void quickImg(string name, Mat& input){
-  if(input.channels() == 2){
-    Mat news[2];
-    split(input,news);
-    phase(news[0],news[1],news[0]);
-    normalize(news[0],news[0],0,1,CV_MINMAX);
-    imshow(name.c_str(), news[0]);
-  }else{
-    imshow(name.c_str(), input);
-  }
+//------------------------------------------------------------------------------
+// Structure to encapsulate zoom trackbar data
+//------------------------------------------------------------------------------
+struct ZoomData {
+    Mat originalImage;     // Image to reprocess on zoom events
+    int zoom = 500;        // Initial zoom value
+    int zoomMax = 1000;    // Maximum zoom value for the trackbar
+    string filterType = "SINC"; // Filter type used in the zoom callback
+};
+
+//------------------------------------------------------------------------------
+// Function: parseCommandLineOptions
+// Description: Uses Boost.Program_options to parse command line arguments
+//------------------------------------------------------------------------------
+Options parseCommandLineOptions(int argc, char** argv) {
+    Options opts;
+    po::options_description desc("Allowed options");
+    desc.add_options()
+        ("help", "Display help message")
+        ("image", po::value<string>(), "Input image file")
+        ("distance", po::value<float>(), "Distance from SLM to hologram")
+        ("type", po::value<string>(), "Type of hologram (FRESNEL, RPN, RPNOCV, FFT, FRECONV)")
+        ("gerch", po::value<bool>(), "Use Gerchberg-Saxton algorithm")
+        ("refwave", po::value<string>(), "Reference wavefront type (FLAT, REF, CHIRP, RAYLEIGH)")
+        ("filimage", po::value<string>(), "Filter for the real input image (e.g., REMAVG, SINC, LAPLACIAN, RPN, CLEARCENTER, TWINREM)")
+        ("filcimage", po::value<string>(), "Filter for the complex input image")
+        ("filafft", po::value<string>(), "Filter for the FFT of the input image")
+        ("filout", po::value<string>(), "Filter for the output image")
+        ("wavelength", po::value<float>(), "Wavelength (default: He-Ne)")
+        ("gentwo", po::value<bool>(), "Generate two images for testing with different refwaves")
+        ("frft_angle", po::value<float>(), "Fractional Fourier transform angle")
+        ("chirp", po::value<string>(), "Chirp function type after FFT")
+    ;
+
+    po::variables_map vm;
+    po::store(po::parse_command_line(argc, argv, desc), vm);
+    po::notify(vm);
+
+    if (vm.count("help")) {
+        cout << desc << "\n";
+        exit(0);
+    }
+
+    if (vm.count("image"))
+        opts.imageFilename = vm["image"].as<string>();
+    if (vm.count("distance"))
+        opts.distance = vm["distance"].as<float>();
+    if (vm.count("wavelength"))
+        opts.wavelength = vm["wavelength"].as<float>();
+    if (vm.count("type"))
+        opts.hologramType = vm["type"].as<string>();
+    if (vm.count("filimage"))
+        opts.filImage = vm["filimage"].as<string>();
+    if (vm.count("filcimage"))
+        opts.filCImage = vm["filcimage"].as<string>();
+    if (vm.count("filafft"))
+        opts.filAfft = vm["filafft"].as<string>();
+    if (vm.count("filout"))
+        opts.filOut = vm["filout"].as<string>();
+    if (vm.count("refwave"))
+        opts.refWave = vm["refwave"].as<string>();
+    if (vm.count("gerch"))
+        opts.gerchOn = vm["gerch"].as<bool>();
+    if (vm.count("chirp"))
+        opts.chirp = vm["chirp"].as<string>();
+    if (vm.count("gentwo"))
+        opts.genTwo = vm["gentwo"].as<bool>();
+    if (vm.count("frft_angle"))
+        opts.frftAngle = vm["frft_angle"].as<float>();
+    else
+        opts.frftAngle = static_cast<float>(CV_PI / 2);
+
+    return opts;
 }
 
-//TODO: use opencv's filtering infrastructure
-//TODO: Gernchberg-Saxton?
-int main(int argc, char** argv){
-  const char* fname = (argc>=1)? argv[1] : "_logo.jpg";
-  //Working transforms:
-  //dft
-  //rpn
-  //Fresnel as convolution
+//------------------------------------------------------------------------------
+// Callback: onZoom
+// Description: Called when the trackbar position changes. Applies a filter and
+//              tiles the image based on the current zoom value.
+//------------------------------------------------------------------------------
+void onZoom(int trackPosition, void* userdata) {
+    ZoomData* zoomData = reinterpret_cast<ZoomData*>(userdata);
+    zoomData->zoom = trackPosition; // Update zoom
 
-  //Working reference phases:
-  //ref_wavefront_holoeye_two
-  //holoeye_chirp for Fresnel
-  //Best effects:
-  //Fresnel + remove complex average
+    // (Optional) Compute a scale factor if needed:
+    float scale = static_cast<float>(trackPosition) / zoomData->zoomMax;
 
-  float distance;
-  string filename;
-  string filename_spatial_filter;
-  string holotype; //RPN, or Fresnel, or FFT
-  string refwave; //Methods from filters.cpp v
-  string filimage; //Methods from filters.cpp v
-  string filcimage;  
-  string filafft;
-  string filout;
-  string chirp;
-  bool gentwo;
-  bool flipzero;
-  bool gerch_on;
-  
-  namedWindow("Output - tiled",CV_WINDOW_NORMAL);
-  eit_hologram eit_holo;
-  gerch Gerch;
-  Mat adft_data,adft_data_2;
-  Mat fresnel;
-  Mat fresn_conv;
-  Mat spatial_filter;
-  Mat padded;                          //expand input image to optimal size
-  Mat g_ROI;
+    Mat temp;
+    zoomData->originalImage.copyTo(temp);
 
-  po::options_description desc("Options:");
-  desc.add_options()
-    ("help","About the program")
-    ("image", po::value<string>(), "File that will be changed into hologram <string>")
-    ("distance" , po::value<float>(), "Distance from SLM to hologram <float>")
-    ("type", po::value<string>(), "Type of hologram <string> (FRESNEL, RPN, RPNOCV, FFT, FRECONV) ")
-    ("gerch" , po::value<bool>(), "Use Gerchberg-Saxton algorithm for the transform")
-    ("refwave", po::value<string>(), "What reference wavefront type, in <string> (FLAT, REF, CHIRP, RAYLEIGH) ")
-    ("filimage", po::value<string>(), "What filtering of the real input image, type: <string> (REMAVG, SINC, LAPLACIAN, RPN, CLEARCENTER, TWINREM)")
-    ("filcimage", po::value<string>(), "What filtering for the complex input image w/ reference wavefront phase, type: <string>")
-    ("filafft", po::value<string>(), "What filtering of the complex FFT of the input image, type: <string>")
-    ("filout", po::value<string>(), "What filtering of the output, type: <string>")
-    ("wavelength", po::value<float>(), "What wavelength is required? default: He-Ne, <float>")
-    ("gentwo", po::value<bool>(), "Generate two images for testing purposes w/ different refwaves <bool>")
-    ("frft_angle", po::value<float>(), "Fractional Fourier transform angle")
-    ("chirp", po::value<string>(), "Add a chirp function after the FFT of the complex input (real image + ref phase) and pointwise multiply, type:<string>");
-  po::variables_map vm;
-
-  //TODO:
-  //Pass the distance to the appropriate reference wave functions and such
-  //Pass all the required Params through the computation pipeline
-  //CHECK THAT ALL THE REFEERNCES ARE WORKING
-  //Take out the Sommerfeld-Rayleigh function out of the fresnel-conv for future use
-  po::store(po::parse_command_line(argc,argv,desc),vm);
-  po::notify(vm);
-
-  { //Display the help
-    if(vm.count("help")){
-      cout<<desc<<"\n";
-      return 1;
-    }
-  }
-
-  { //Load the image 
-    if(vm.count("image")){
-      filename = vm["image"].as<string>();
-    }else{
-      filename = "_logo.jpg";
-    }
-  }
-  
-  { //Set the distance
-    if(vm.count("distance")){
-      distance = vm["distance"].as<float>();
-      glob_distance = distance;
-    }else{
-      distance = 1.0f;
-      glob_distance = distance;
-    }
-  }
-  
-  { //Set the distance
-    if(vm.count("frft_angle")){
-      frft_angle = vm["frft_angle"].as<float>();
-    }else{
-      frft_angle = pi/2;
-    }
-  }
-  
-  { //Load the image
-    std::mutex wl_mutex;
-    wl_mutex.lock();
-    if(vm.count("wavelength")){
-      wavelength = vm["wavelength"].as<float>();
-    }else{
-      wavelength = 632.8e-9;
-    }
-    wl_mutex.unlock();
-  }
-  
-  { //Set the hologram type
-    if(vm.count("type")){
-      holotype = vm["type"].as<string>();
-    }else{
-      holotype = "FRESNEL";
-    }
-  }
-
-  { //Set the filter for the input image
-    if(vm.count("filimage")){
-      filimage = vm["filimage"].as<string>();
-    }else{
-      filimage = "NONE";
-    }
-    //if not set, then filimage.size() == 0
-  }
-
-  { //Set the complex filtering of the complex input
-    if(vm.count("filcimage")){
-      filcimage = vm["filcimage"].as<string>();
-    }
-    //if not set, then filcimage.size() == 0
-  }
-
-  { //Set the filtering after the FFT
-    if(vm.count("filafft")){
-      filafft = vm["filafft"].as<string>();
-    }
-    //if not set, then filafft.size() == 0
-  }
-
-  { //Set the reference wavefront
-    if(vm.count("refwave")){
-      refwave = vm["refwave"].as<string>();
-    }
-    //if not set, then refware.size() == 0
-  }
-
-  { //Set the reference wavefront
-    if(vm.count("gerch")){
-      gerch_on = vm["gerch"].as<bool>();
-    }else{
-      gerch_on = true;
-    }
-    //if not set, then refware.size() == 0
-  }
-  
-  { //Set the filtering of the output image
-    if(vm.count("filout")){
-       filout = vm["filout"].as<string>();
-    }
-    //if not set, then filout.size() == 0
-  }
-
-  { //Set the chirp function
-    if(vm.count("chirp")){
-       chirp = vm["chirp"].as<string>();
-    }
-    //if not set, then chirp.size() == 0;
-  }
-
-  { //Create two images with different reference waves
-    if(vm.count("gentwo")){
-       gentwo = vm["gentwo"].as<bool>();
-    }else{
-      gentwo = false;
-    }
-  }
-  
-  //The region of actual processing of the images
-  //First we get a padded image, which we then push through into the processing regime
-  g_ROI = imread(filename,CV_LOAD_IMAGE_GRAYSCALE); //Load the real image and save its type
-  typetest(g_ROI);
-  eit_holo.set_optimal_holosize(g_ROI, padded); //Sets optimal size and converts matrix types
-  typetest(padded);
-
-  Mat intensity;
-  Mat different_image;
-  g_ROI.copyTo(different_image);
-  g_ROI.copyTo(intensity);
-  /*******************************************************************
-   * STEP 1 : Filter the real-valued input image                     *
-   ******************************************************************/
-  eit_holo.holoeye_filter(padded,
-			  filimage); //filter the real image (check if there is a single channel in the filtering functions 
-
-  /*******************************************************************
-   * STEP 2 : Add a reference wave to the input                      *
-   ******************************************************************/
-  eit_holo.holoeye_reference(padded,
-			     refwave); //prepare the reference wavefront
-
-  /*******************************************************************
-   * STEP 3 : Filter the image with the phase-only reference         *
-   ******************************************************************/
-  eit_holo.holoeye_filter(padded,
-			  filcimage);
-  //filter the complex image
-  
-  /*******************************************************************
-   * STEP 4 : Perform the transform fil([fil(img_re)|img_im])        *
-   ******************************************************************/
-  if(gerch_on){
-    Gerch(padded, intensity);
-  }
-  else
-    eit_holo.holoeye_transform(padded,
-			       adft_data,
-			       holotype); //Perform the transform of the desired type
-  /*******************************************************************
-   * STEP 5 : Perform fil(xFFT(fil([fil(img_re)|img_im])))           *
-   ******************************************************************/
-  eit_holo.holoeye_filter(padded,
-   			  filafft);
-  
-  /*******************************************************************
-   * STEP 6 : tile(phase(fil(xFFT(fil([fil(img_re)|img_im])))))      *
-   ******************************************************************/
-  Mat backup;
-  padded.copyTo(backup);
-  Mat finalres = eit_holo.tile_to_fhd(padded);
-  
-  /*******************************************************************
-   * STEP 7 : fil(tile(phase(fil(xFFT(fil([fil(img_re)|img_im])))))) *
-   ******************************************************************/
-  eit_holo.holoeye_filter(finalres,
-   			  filout);
-  zoom = 500;
-  padded.copyTo(backup__);
-
-  createTrackbar("Zoom via sinc","Output - tiled",
-		 &zoom,
-		 zoommax,
-		 onzoom,
-		 (void*)&finalres);
-  Mat _final;
-  
-  if(gerch_on){
-    Mat final = eit_holo.tile_to_fhd(intensity);
-    imshow("Output - tiled", final);
-    imwrite("./latest-GS.jpg",final);
-  }else{
-    imshow("Output - tiled", finalres);
-    imwrite("./latest.jpg", finalres);
-    typetest(intensity);
-  }
-  
-  if(gentwo){
-    normalize(finalres,finalres,0,255,CV_MINMAX);
-    imwrite("./holobo-1.jpg",finalres);
-  }
-
-  cout<<"Wavelength:"<<wavelength<<"\n";
-  
-  bool tiled_fs=false;
-  while(int x=waitKey(30)){
-    if(x==102){
-      if(!tiled_fs){
-	setWindowProperty("Output - tiled", CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
-	finalres = eit_holo.tile_to_fhd(backup);
-	//setWindowProperty("tiled_conv",CV_WND_PROP_FULLSCREEN, CV_WINDOW_FULLSCREEN);
-	tiled_fs=true;
-      }else{
-	finalres = eit_holo.tile_to_fhd(backup);
-	tiled_fs=false;
-	setWindowProperty("Output - tiled", CV_WND_PROP_FULLSCREEN, CV_WINDOW_NORMAL);
-	//setWindowProperty("tiled_conv",CV_WND_PROP_FULLSCREEN, CV_WINDOW_NORMAL);
-      }
-    }
-    if(x==103){
-      
-    }
-    if(x==97){
-      
-    }
-    if(x==27){
-      exit(-1);
-    }
-  }
+    eit::eit_hologram eitHolo;
+    temp = eitHolo.holoeye_filter(temp, {});
+    temp = eitHolo.tile_to_fhd(temp);
+    imshow("Output - tiled", temp);
 }
 
+//------------------------------------------------------------------------------
+// Main function: Processes the image and displays the output.
+//------------------------------------------------------------------------------
+int main(int argc, char** argv) {
+    // Parse command line parameters.
+    Options opts = parseCommandLineOptions(argc, argv);
+
+    // Update external/global parameters if needed by other modules.
+    glob_distance = opts.distance;
+    wavelength = opts.wavelength;
+    frft_angle = opts.frftAngle;
+
+    // Create a window for output.
+    namedWindow("Output - tiled", WINDOW_NORMAL);
+
+    // Create instances of processing classes.
+    eit::eit_hologram eitHolo;
+    eit::gerch Gerch;  // Instance for Gerchberg-Saxton algorithm
+
+    //--------------------------------------------------------------------------
+    // Step 0: Load and prepare the input image.
+    //--------------------------------------------------------------------------
+    Mat g_ROI = imread(opts.imageFilename, IMREAD_GRAYSCALE);
+    if (g_ROI.empty()) {
+        cerr << "Error: Could not open or find the image: " << opts.imageFilename << endl;
+        return -1;
+    }
+    eit::typetest(g_ROI); // Debug function (assumed to be defined in main.hpp)
+
+    Mat padded;
+    eitHolo.set_optimal_holosize(g_ROI, padded);
+    eit::typetest(padded);
+
+    // Copy the padded image for later processing.
+    Mat intensity;
+    padded.copyTo(intensity);
+
+    //--------------------------------------------------------------------------
+    // Step 1: Filter the real-valued input image.
+    //--------------------------------------------------------------------------
+    eitHolo.holoeye_filter(padded, {});
+
+    //--------------------------------------------------------------------------
+    // Step 2: Add a reference wave to the input.
+    //--------------------------------------------------------------------------
+    eitHolo.holoeye_reference(padded, opts.refWave);
+
+    //--------------------------------------------------------------------------
+    // Step 3: Filter the complex image (with phase-only reference).
+    //--------------------------------------------------------------------------
+    eitHolo.holoeye_filter(padded, {});
+
+    //--------------------------------------------------------------------------
+    // Step 4: Perform the transform.
+    //--------------------------------------------------------------------------
+    if (opts.gerchOn) {
+        Gerch(padded, intensity);
+    } else {
+        Mat adft_data;
+        eitHolo.holoeye_transform(padded, adft_data, {});
+    }
+
+    //--------------------------------------------------------------------------
+    // Step 5: Filter the FFT of the image.
+    //--------------------------------------------------------------------------
+    eitHolo.holoeye_filter(padded, {});
+
+    //--------------------------------------------------------------------------
+    // Step 6: Tile the phase image to full HD resolution.
+    //--------------------------------------------------------------------------
+    Mat backup;
+    padded.copyTo(backup);
+    Mat finalres = eitHolo.tile_to_fhd(padded);
+
+    //--------------------------------------------------------------------------
+    // Step 7: Filter the tiled image.
+    //--------------------------------------------------------------------------
+    eitHolo.holoeye_filter(finalres, {});
+
+    // Set up the zoom trackbar.
+    ZoomData zoomData;
+    finalres.copyTo(zoomData.originalImage);
+    zoomData.zoom = 500;
+    zoomData.zoomMax = 1000;
+    zoomData.filterType = "SINC";  // Can be parameterized if desired
+
+    createTrackbar("Zoom via sinc", "Output - tiled", &zoomData.zoom, zoomData.zoomMax, onZoom, &zoomData);
+
+    //--------------------------------------------------------------------------
+    // Display and save the final output.
+    //--------------------------------------------------------------------------
+    if (opts.gerchOn) {
+        Mat final = eitHolo.tile_to_fhd(intensity);
+        imshow("Output - tiled", final);
+        imwrite("./latest-GS.jpg", final);
+    } else {
+        imshow("Output - tiled", finalres);
+        imwrite("./latest.jpg", finalres);
+    }
+
+    if (opts.genTwo) {
+        Mat temp;
+        normalize(finalres, temp, 0, 255, NORM_MINMAX);
+        imwrite("./holobo-1.jpg", temp);
+    }
+
+    cout << "Wavelength: " << wavelength << "\n";
+
+    //--------------------------------------------------------------------------
+    // Event loop: allow toggling fullscreen and exit on ESC.
+    //--------------------------------------------------------------------------
+    bool tiledFullScreen = false;
+    while (true) {
+        int key = waitKey(30);
+        if (key == 27) { // ESC key: exit
+            break;
+        } else if (key == 102) { // 'f' key: toggle fullscreen
+            if (!tiledFullScreen) {
+                setWindowProperty("Output - tiled", WND_PROP_FULLSCREEN, WINDOW_FULLSCREEN);
+                finalres = eitHolo.tile_to_fhd(backup);
+                tiledFullScreen = true;
+            } else {
+                finalres = eitHolo.tile_to_fhd(backup);
+                tiledFullScreen = false;
+                setWindowProperty("Output - tiled", WND_PROP_FULLSCREEN, WINDOW_NORMAL);
+            }
+        }
+        // Placeholders for additional key commands:
+        else if (key == 103) { /* Additional functionality for key 'g' can go here. */ }
+        else if (key == 97)  { /* Additional functionality for key 'a' can go here. */ }
+    }
+
+    return 0;
+}

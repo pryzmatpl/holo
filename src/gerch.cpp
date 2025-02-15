@@ -1,114 +1,132 @@
 #include "../include/gerch.hpp"
+#include <iostream>
+#include <opencv2/opencv.hpp>
+#include <opencv2/highgui/highgui.hpp>
+#include <cmath>
+#include <stdexcept>
 
-namespace po = boost::program_options;
-using namespace dlib;
-using namespace std;
+namespace eit {
 
-gerch::gerch(){
+//------------------------------------------------------------------------------
+// Constructor & Destructor
+//------------------------------------------------------------------------------
+gerch::gerch() {
+    // Initialization if needed.
 }
 
-gerch::~gerch(){
+gerch::~gerch() {
+    // Cleanup if needed.
 }
 
-bool gerch::error_less_than(cv::Mat& in,
-			    cv::Mat& initial){
+//------------------------------------------------------------------------------
+// error_less_than: Placeholder for error checking (not yet implemented).
+//------------------------------------------------------------------------------
+bool gerch::error_less_than(cv::Mat& in, cv::Mat& initial) {
+    // TODO: Implement error measurement between 'in' and 'initial'.
+    return false;
 }
 
-
-void amphasetoreim(cv::Mat input[2]){
-  for(int row=0; row<input[0].rows; row++){
-    for(int col=0; col<input[0].cols; col++){
-      float& re = input[0].at<float>(row,col); //which right now is sqrt(intensity)
-      float& im = input[1].at<float>(row,col); //which right now is random phase
-
-      float real = re*cos(im); //the real part is the amplitude times the cos of phase
-      float imaginary = im*sin(im);
-
-      re = real;
-      im = imaginary;
+//------------------------------------------------------------------------------
+// Helper function: amphasetoreim
+// Converts an amplitude-phase representation (in two channels)
+// into a real-imaginary representation.
+// Assumes that input[0] holds the amplitude and input[1] holds the phase.
+//------------------------------------------------------------------------------
+void amphasetoreim(cv::Mat input[2]) {
+    for (int row = 0; row < input[0].rows; row++) {
+        for (int col = 0; col < input[0].cols; col++) {
+            // 're' is amplitude and 'im' is phase.
+            float &ampl = input[0].at<float>(row, col);
+            float &phase = input[1].at<float>(row, col);
+            // Convert to real-imaginary representation:
+            float realPart = ampl * std::cos(phase);
+            float imagPart = ampl * std::sin(phase);
+            ampl = realPart;
+            phase = imagPart;
+        }
     }
-    //Right now we have the intensity and the phase encoded in complex numbers
-  }
 }
 
-void reimtoamphase(cv::Mat input[2]){
-  cv::Mat ampl,phases;
-  phase(input[0], input[1], phases);
-  magnitude(input[0], input[1], ampl);
-  input[0] = ampl;
-  input[1] = phases;
-  //Front to back between re-im representation and ampl-phase
+//------------------------------------------------------------------------------
+// Helper function: reimtoamphase
+// Converts a real-imaginary representation (in two channels)
+// into an amplitude-phase representation.
+//------------------------------------------------------------------------------
+void reimtoamphase(cv::Mat input[2]) {
+    cv::Mat ampl, phases;
+    cv::phase(input[0], input[1], phases);
+    cv::magnitude(input[0], input[1], ampl);
+    input[0] = ampl;
+    input[1] = phases;
 }
 
-void gerch::operator()(cv::Mat& input,
-		       cv::Mat& output){
+//------------------------------------------------------------------------------
+// Operator() overload: Implements the Gerchberg-Saxton (GS) algorithm.
+//------------------------------------------------------------------------------
+void gerch::operator()(cv::Mat& input, cv::Mat& output) {
+    std::cout << "Going into GS algorithm" << std::endl;
 
-  std::cout<<"Going into GS alg\n";
+    // Create two-channel (real-imaginary) representation for the complex image.
+    cv::Mat input_cplx[2] = {
+        cv::Mat::zeros(input.size(), CV_32F),
+        cv::Mat::zeros(input.size(), CV_32F)
+    };
 
-  cv::Mat input_cplx[] = {cv::Mat::zeros(input.size(), CV_32F),
-			  cv::Mat::zeros(input.size(), CV_32F)}; //empty for phase
-  typetest(input);
-  typetest(input_cplx[0]);
-  
-  cv::Mat intensity_sqrt = cv::Mat::zeros(input.size(), CV_32F);
-  cv::Mat singles        = cv::Mat::zeros(input.size(), CV_32F);
-  cv::Mat phase_temp     = cv::Mat::zeros(input.size(), CV_32F);
+    // Call typetest (assumed defined in fft.cpp within namespace eit)
+    typetest(input);
+    typetest(input_cplx[0]);
 
-  for(int row=0; row<input.rows; row++){ //opencv's sqrt does not do what I want
-    for(int col=0; col<input.cols; col++){
-      float& ref = intensity_sqrt.at<float>(row,col);
-      float& sing= singles.at<float>(row,col);
-      sing = 1.0f;
-      ref = 1.0f;
+    // Create matrices for a uniform amplitude (all ones) and phase.
+    cv::Mat intensity_sqrt = cv::Mat::zeros(input.size(), CV_32F);
+    cv::Mat singles = cv::Mat::zeros(input.size(), CV_32F);
+    cv::Mat phase_temp = cv::Mat::zeros(input.size(), CV_32F);
+
+    for (int row = 0; row < input.rows; row++) {
+        for (int col = 0; col < input.cols; col++) {
+            intensity_sqrt.at<float>(row, col) = 1.0f;
+            singles.at<float>(row, col) = 1.0f;
+        }
     }
-  }//fill the ampl or sqrt(intens) 
 
-  cv::Mat first_iter(input.size(), CV_32FC1);
-  typetest(first_iter);
-  typetest(input_cplx[0]);
-  typetest(input_cplx[1]);
-  
-  cv::randn(input_cplx[1],128,32); //random phase distribution
+    cv::Mat first_iter(input.size(), CV_32FC1);
+    typetest(first_iter);
+    typetest(input_cplx[0]);
+    typetest(input_cplx[1]);
 
-  //According to Fienup, we have to use the amplitude
-  //and not the phase as our estimation variable
+    // Initialize the phase channel with a random normal distribution.
+    cv::randn(input_cplx[1], 128, 32);
 
-  //TODO:
-  // - analyze the code from the student's GS implementation
-  // - look into classical machine learning (steepest descent, lsq etc) to see a possibility of calculating the holograms
-  // - test what happens when adding a Least Squares test between the input data and the approximation
-  // - test if the domains are correctly analyzed and the proper mode is input into the iterations
-  // - backpropagation? machine learning? deep learning?
-  
-  for(int a = 0; a < 100000; a++){
-    amphasetoreim(input_cplx);                            //we have re-im representation
-    merge(input_cplx, 2, first_iter);                     //merge the two channels, [0] = uniform amplitude, [1] = random phase
-    dft(first_iter,first_iter);                           //first DFT from Fourier space to object space
-    split(first_iter, input_cplx);                        //split the DFT channels into the input_cplx
+    // Iteratively update the estimate using the Gerchberg-Saxton algorithm.
+    for (int a = 0; a < 100000; a++) {
+        amphasetoreim(input_cplx);                      // Convert amplitude-phase to real-imaginary.
+        cv::merge(input_cplx, 2, first_iter);           // Merge channels into a complex image.
+        cv::dft(first_iter, first_iter);                // Forward DFT.
+        cv::split(first_iter, input_cplx);              // Split back into channels.
 
-    reimtoamphase(input_cplx);                            //return from re-im to am-phase in the spatial frequency domain
-    intensity_sqrt.copyTo(input_cplx[0]);                 //copy uniform array of 1s in Fourier space into the amplitudes, leave phase alone
+        reimtoamphase(input_cplx);                      // Convert back to amplitude-phase.
+        intensity_sqrt.copyTo(input_cplx[0]);           // Force the amplitude to be uniform (all ones).
 
-    amphasetoreim(input_cplx);                            //go from amphase to reim
-    merge(input_cplx, 2, first_iter);                     //merge into dft-capable device
-    dft(first_iter,first_iter,DFT_INVERSE);               //go back to linear space
-    split(first_iter,input_cplx);                         //split channels again
+        amphasetoreim(input_cplx);                      // Convert to real-imaginary again.
+        cv::merge(input_cplx, 2, first_iter);           // Merge channels.
+        cv::dft(first_iter, first_iter, cv::DFT_INVERSE);// Inverse DFT.
+        cv::split(first_iter, input_cplx);              // Split channels.
 
-    reimtoamphase(input_cplx);                            //reim to amphase in order to copy the 1s into Fourier space again
-    singles.copyTo(input_cplx[0]);                        //copy uniform amplitude into fourier space
-  }
+        reimtoamphase(input_cplx);                      // Convert to amplitude-phase.
+        singles.copyTo(input_cplx[0]);                  // Replace amplitude with uniform ones.
+    }
 
-  merge(input_cplx, 2, output);
-	
+    cv::merge(input_cplx, 2, output);
 }
 
-cv::Mat gerch::eit_lsq(cv::Mat& in,
-		       cv::Mat& cmp){
-  cv::Mat returnee;
-  
-  if( !cv::solve(in,cmp,returnee,DECOMP_NORMAL) ){
-    throw "Not possible to solve the problem";
-  }
-  
-  return returnee;
+//------------------------------------------------------------------------------
+// eit_lsq: Solves a least-squares problem using OpenCV's solve function.
+//------------------------------------------------------------------------------
+cv::Mat gerch::eit_lsq(cv::Mat& in, cv::Mat& cmp) {
+    cv::Mat returnee;
+    if (!cv::solve(in, cmp, returnee, cv::DECOMP_NORMAL)) {
+        throw std::runtime_error("Not possible to solve the problem");
+    }
+    return returnee;
 }
+
+} // namespace eit
