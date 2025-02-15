@@ -28,7 +28,9 @@ TEST(FiltersTest, HoloeyeFilterC1_DoubleLambda) {
             p *= 2.0f;
         });
     };
-    Mat output = eit_hologram::holoeye_filter_c1(input, doubleLambda);
+    // Instantiate an object of eit_hologram to call its member function.
+    eit_hologram holo;
+    Mat output = holo.holoeye_filter_c1(input, doubleLambda);
     // Each element should now equal 2.
     for (int i = 0; i < output.rows; ++i)
         for (int j = 0; j < output.cols; ++j)
@@ -58,7 +60,8 @@ TEST(FiltersTest, FilterRemavg) {
 // Should preserve size and type.
 TEST(FiltersTest, HoloeyeFilter_Remavg) {
     Mat input = (Mat_<float>(3,3) << 10, 20, 30, 40, 50, 60, 70, 80, 90);
-    Mat output = eit_hologram::holoeye_filter(input, {});
+    eit_hologram holo;
+    Mat output = holo.holoeye_filter(input, "REMAVG");
     EXPECT_EQ(output.size(), input.size());
     EXPECT_EQ(output.type(), input.type());
 }
@@ -69,7 +72,8 @@ TEST(FiltersTest, HoloeyeFilter_Remavg) {
 TEST(FiltersTest, HoloeyeFilterSpatial) {
     Mat input = Mat::ones(4, 4, CV_32F);
     Mat spatial_filter = Mat::ones(4, 4, CV_32F);
-    Mat output = eit_hologram::holoeye_filter_spatial(input, spatial_filter);
+    eit_hologram holo;
+    Mat output = holo.holoeye_filter_spatial(input, spatial_filter);
     EXPECT_EQ(output.size(), input.size());
     EXPECT_EQ(output.type(), CV_32F);
 }
@@ -136,9 +140,4 @@ TEST(FiltersTest, FilterClearCenter_SizeType) {
     filter_clear_center(output);
     EXPECT_EQ(output.size(), input.size());
     EXPECT_EQ(output.type(), input.type());
-}
-
-int main(int argc, char **argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
 }

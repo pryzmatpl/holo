@@ -5,7 +5,6 @@ project(holo)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
-# Java settings (if needed)
 set(JAVA_HOME "/usr/lib/jvm/java-23-openjdk")
 set(JAVA_AWT_LIBRARY "${JAVA_HOME}/lib/libjawt.so")
 set(JAVA_JVM_LIBRARY "${JAVA_HOME}/lib/server/libjvm.so")
@@ -18,10 +17,9 @@ set(Boost_USE_STATIC_LIBS OFF)
 set(Boost_USE_MULTITHREADED ON)
 set(Boost_USE_STATIC_RUNTIME OFF)
 
-# Add custom module paths
+# Add our custom modules paths
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/Modules/")
 
-# VTK settings
 set(VTK_WRAP_JAVA OFF CACHE BOOL "Turn off VTK Java wrapping")
 set(VTK_JAVA_INSTALL OFF CACHE BOOL "Turn off VTK Java installation")
 
@@ -34,18 +32,23 @@ FetchContent_Declare(
 )
 FetchContent_MakeAvailable(CLI11)
 
+# Workaround: set CLI11_DIR so that VTK can find it.
+if(NOT CLI11_DIR)
+    set(CLI11_DIR ${cli11_SOURCE_DIR})
+endif()
+list(APPEND CMAKE_PREFIX_PATH ${CLI11_DIR})
+
 # Find required packages
 find_package(Boost 1.55.0 REQUIRED COMPONENTS system thread iostreams program_options)
 find_package(OpenCV 4.11.0 REQUIRED)
 find_package(GSL REQUIRED)
 find_package(GTest REQUIRED)
 find_package(VTK REQUIRED)
-
 if(VTK_FOUND)
     include(${VTK_USE_FILE})
 endif()
 
-# Set include directories
+# Include directories
 set(INC_OWN "${CMAKE_SOURCE_DIR}/include")
 include_directories(${INC_OWN})
 include_directories(${Boost_INCLUDE_DIRS})
@@ -53,7 +56,7 @@ include_directories(${GSL_INCLUDE_DIRS})
 include_directories(${GTEST_INCLUDE_DIRS})
 include_directories(${cli11_SOURCE_DIR}/include)
 
-# Set additional compiler flags (removing invalid ones)
+# Set additional compiler flags
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g -O3 -Wreturn-type -D__extern_always_inline=inline")
 
 # Create an extra variable for Boost.Program_options
@@ -65,26 +68,20 @@ else()
     set(EXTRA_BOOST_LIBS "")
 endif()
 
-# Main executables
-add_executable(holo
-        main.cpp
+# --------------------------------------------------------------------
+# Create a library target for your core code.
+# Exclude main application files like main.cpp.
+# --------------------------------------------------------------------
+add_library(holo_core
         src/reference.cpp
         src/fft.cpp
         src/filters.cpp
         src/gerch.cpp
-        include/optimize.hpp
+        src/optimize.cpp
         src/global.cpp
 )
 
-add_executable(holorunner
-        src/holorunner.cpp
-        src/reference.cpp
-        src/fft.cpp
-        src/filters.cpp
-        src/global.cpp
-)
-
-target_link_libraries(holo
+target_link_libraries(holo_core
         ${Boost_LIBRARIES}
         ${EXTRA_BOOST_LIBS}
         ${OpenCV_LIBS}
@@ -92,26 +89,27 @@ target_link_libraries(holo
         ${VTK_LIBRARIES}
 )
 
-target_link_libraries(holorunner
-        ${Boost_LIBRARIES}
-        ${EXTRA_BOOST_LIBS}
-        ${OpenCV_LIBS}
-        ${VTK_LIBRARIES}
-)
+# Main executables
+add_executable(holo main.cpp)
+add_executable(holorunner src/holorunner.cpp)
 
-# Google Test integration
+target_link_libraries(holo holo_core)
+target_link_libraries(holorunner holo_core)
+
+# --------------------------------------------------------------------
+# Google Test integration: add test executable
+# Include both test sources and core sources in the test target.
+# --------------------------------------------------------------------
 file(GLOB TEST_SOURCES "test/*.cpp")
 if(TEST_SOURCES)
     add_executable(runTests
             ${TEST_SOURCES}
-            test/reference_test.cpp
-            test/optimize_test.cpp
-            test/holorunner_test.cpp
-            test/gerch_test.cpp
-            test/filters_test.cpp
-            test/fft_test.cpp
+            test/test_main.cpp
+            # No need to explicitly list each test file if they match the glob,
+            # but if you want, you can list them.
     )
     target_link_libraries(runTests
+            holo_core
             ${GTEST_LIBRARIES}
             ${GTEST_MAIN_LIBRARIES}
             ${Boost_LIBRARIES}

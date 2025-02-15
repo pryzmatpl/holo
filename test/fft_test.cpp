@@ -15,9 +15,9 @@ using namespace std;
 using namespace eit;
 
 // Define external globals required by fft.cpp.
-float wavelength = 632.8e-9f;
-float glob_distance = 1.0f;
-float frft_angle = constants::pi / 2.0f;
+extern float wavelength;
+extern float glob_distance;
+extern float frft_angle;
 
 //------------------------------------------------------------------------------
 // Test: typetest
@@ -35,7 +35,9 @@ TEST(FFTTest, TypetestDoesNotThrow) {
 TEST(FFTTest, TileToFHDSizeAndType) {
     // Create a simple grayscale image.
     Mat input = Mat::ones(10, 10, CV_32F);
-    Mat output = eit_hologram::tile_to_fhd(input);
+    // Create an instance to call non-static member function.
+    eit_hologram holo;
+    Mat output = holo.tile_to_fhd(input);
     int expectedCols = static_cast<int>(constants::holoeye_width);
     int expectedRows = static_cast<int>(constants::holoeye_height);
     EXPECT_EQ(output.cols, expectedCols);
@@ -48,7 +50,8 @@ TEST(FFTTest, TileToFHDSizeAndType) {
 //------------------------------------------------------------------------------
 TEST(FFTTest, TileToFHDAmpSizeAndType) {
     Mat input = Mat::ones(10, 10, CV_32F);
-    Mat output = eit_hologram::tile_to_fhd_amp(input);
+    eit_hologram holo;
+    Mat output = holo.tile_to_fhd_amp(input);
     int expectedCols = static_cast<int>(constants::holoeye_width);
     int expectedRows = static_cast<int>(constants::holoeye_height);
     EXPECT_EQ(output.cols, expectedCols);
@@ -62,7 +65,8 @@ TEST(FFTTest, TileToFHDAmpSizeAndType) {
 TEST(FFTTest, SetOptimalHoloSize) {
     Mat input = Mat::ones(20, 20, CV_32F);
     Mat output;
-    Size optimalSize = eit_hologram::set_optimal_holosize(input, output);
+    eit_hologram holo;
+    Size optimalSize = holo.set_optimal_holosize(input, output);
     EXPECT_GT(optimalSize.width, 0);
     EXPECT_GT(optimalSize.height, 0);
     EXPECT_FALSE(output.empty());
@@ -78,7 +82,9 @@ TEST(FFTTest, HoloeyeTransformFFT) {
     Mat input;
     merge(vector<Mat>{realPart, imagPart}, input);
     Mat adft_data;
-    Mat output = eit_hologram::holoeye_transform(input, adft_data, {});
+    eit_hologram holo;
+    // Passing "FFT" as holotype.
+    Mat output = holo.holoeye_transform(input, adft_data, "FFT");
     EXPECT_FALSE(output.empty());
     EXPECT_EQ(output.size(), input.size());
     EXPECT_EQ(output.channels(), 2);
@@ -93,7 +99,8 @@ TEST(FFTTest, HoloeyeFractionalFT) {
     Mat input;
     merge(vector<Mat>{realPart, imagPart}, input);
     Mat cplx;
-    Mat output = eit_hologram::holoeye_fractional_ft(input, cplx, frft_angle);
+    eit_hologram holo;
+    Mat output = holo.holoeye_fractional_ft(input, cplx, frft_angle);
     EXPECT_FALSE(output.empty());
     EXPECT_EQ(output.size(), input.size());
     EXPECT_EQ(output.channels(), 2);
@@ -110,7 +117,8 @@ TEST(FFTTest, HoloeyeAngularSpectrum) {
     Mat input;
     merge(vector<Mat>{realPart, imagPart}, input);
     Mat cplx;
-    Mat output = eit_hologram::holoeye_angular_spectrum(input, cplx);
+    eit_hologram holo;
+    Mat output = holo.holoeye_angular_spectrum(input, cplx);
     EXPECT_FALSE(output.empty());
     EXPECT_EQ(output.size(), input.size());
     EXPECT_EQ(output.channels(), 2);
@@ -125,7 +133,8 @@ TEST(FFTTest, HoloeyeFresnel) {
     Mat input;
     merge(vector<Mat>{realPart, imagPart}, input);
     Mat c_data;
-    Mat output = eit_hologram::holoeye_fresnel(input, c_data, 1.0f, 0.0f);
+    eit_hologram holo;
+    Mat output = holo.holoeye_fresnel(input, c_data, 1.0f, 0.0f);
     EXPECT_FALSE(output.empty());
     EXPECT_EQ(output.size(), input.size());
     EXPECT_EQ(output.channels(), 2);
@@ -138,7 +147,8 @@ TEST(FFTTest, HoloeyeFresnel) {
 TEST(FFTTest, HoloeyeDFTSizeAndType) {
     Mat input = Mat::ones(8, 8, CV_32F);
     Mat outputdata;
-    Mat output = eit_hologram::holoeye_dft(input, outputdata);
+    eit_hologram holo;
+    Mat output = holo.holoeye_dft(input, outputdata);
     EXPECT_EQ(output.size(), input.size());
     EXPECT_EQ(output.type(), input.type());
 }
@@ -150,7 +160,8 @@ TEST(FFTTest, IDFTOneNormalization) {
     Mat input = Mat::ones(8, 8, CV_32F);
     Mat dftInput;
     dft(input, dftInput);
-    Mat output = idft_one(dftInput);
+    // Call free function idft_one from the namespace.
+    Mat output = eit::idft_one(dftInput);
     double minVal, maxVal;
     minMaxLoc(output, &minVal, &maxVal);
     EXPECT_GE(minVal, 0.0);
@@ -164,7 +175,7 @@ TEST(FFTTest, IDFTTwoNormalization) {
     Mat input = Mat::ones(8, 8, CV_32F);
     Mat dftInput;
     dft(input, dftInput, DFT_COMPLEX_OUTPUT);
-    Mat output = idft_two(dftInput);
+    Mat output = eit::idft_two(dftInput);
     double minVal, maxVal;
     minMaxLoc(output, &minVal, &maxVal);
     EXPECT_GE(minVal, 0.0);
@@ -177,7 +188,8 @@ TEST(FFTTest, IDFTTwoNormalization) {
 TEST(FFTTest, HoloeyeRPNType) {
     Mat input = Mat::ones(8, 8, CV_32FC2);
     Mat outputdata;
-    Mat output = eit_hologram::holoeye_rpn(input, outputdata);
+    eit_hologram holo;
+    Mat output = holo.holoeye_rpn(input, outputdata);
     EXPECT_EQ(output.size(), input.size());
     EXPECT_EQ(output.type(), CV_32FC2);
 }
@@ -188,12 +200,8 @@ TEST(FFTTest, HoloeyeRPNType) {
 TEST(FFTTest, HoloeyeRPNNoTwinType) {
     Mat input = Mat::ones(8, 8, CV_32FC2);
     Mat outputdata;
-    Mat output = eit_hologram::holoeye_rpn_no_twin(input, outputdata);
+    eit_hologram holo;
+    Mat output = holo.holoeye_rpn_no_twin(input, outputdata);
     EXPECT_EQ(output.size(), input.size());
     EXPECT_EQ(output.type(), CV_32FC2);
-}
-
-int main(int argc, char **argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
 }

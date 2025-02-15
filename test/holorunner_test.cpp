@@ -42,7 +42,7 @@ TEST(HolorunnerTest, GetFileContentsRemovesWhitespace) {
     ofs << " image1.jpg \n; image2.jpg\t;image3.jpg \r\n";
     ofs.close();
 
-    std::string contents = get_file_contents(filename);
+    std::string contents = get_file_contents(filename.c_str());
     // Expect that the returned string is the concatenation of tokens with no whitespace.
     EXPECT_EQ(contents, "image1.jpg;image2.jpg;image3.jpg");
 
@@ -76,12 +76,4 @@ TEST(HolorunnerTest, MsDelayCalculation) {
     float frequency = 10.0f;
     int ms_delay = static_cast<int>(1000.0f / frequency);
     EXPECT_EQ(ms_delay, 100);
-}
-
-//------------------------------------------------------------------------------
-// Main entry point for tests
-//------------------------------------------------------------------------------
-int main(int argc, char **argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
 }

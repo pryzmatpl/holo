@@ -60,8 +60,3 @@ TEST(BasicOperationTest, MismatchedTypeThrows) {
 
     EXPECT_THROW(basic_operation(input, input_before, desired), std::invalid_argument);
 }
-
-int main(int argc, char **argv) {
-    ::testing::InitGoogleTest(&argc, argv);
-    return RUN_ALL_TESTS();
-}

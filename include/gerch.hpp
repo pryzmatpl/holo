@@ -33,6 +33,8 @@
 #include "optimize.hpp"
 
 namespace eit {
+    void amphasetoreim(cv::Mat input[2]);
+    void reimtoamphase(cv::Mat input[2]);
 
     //------------------------------------------------------------------------------
     // Class: gerch

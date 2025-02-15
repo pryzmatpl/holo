@@ -42,6 +42,9 @@ enum HologramType {
 //------------------------------------------------------------------------------
 void typetest(cv::Mat& in);
 
+cv::Mat idft_one(cv::Mat inputdata);
+cv::Mat idft_two(cv::Mat magI);
+
 //------------------------------------------------------------------------------
 // Class: eit_hologram
 // Description: Contains the methods to create and process holograms for the
