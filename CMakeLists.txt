@@ -43,6 +43,10 @@ find_package(Boost 1.55.0 REQUIRED COMPONENTS system thread iostreams program_op
 find_package(OpenCV 4.11.0 REQUIRED)
 find_package(GSL REQUIRED)
 find_package(GTest REQUIRED)
+
+# Disable VTK GDAL support if not needed.
+set(VTK_USE_GDAL OFF CACHE BOOL "Disable GDAL support in VTK")
+
 find_package(VTK REQUIRED)
 if(VTK_FOUND)
     include(${VTK_USE_FILE})

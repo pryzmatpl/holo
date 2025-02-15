@@ -5,7 +5,8 @@
 # export JAVA_HOME="/usr/lib/jvm/java-23-openjdk"
 
 # Set the required library path.
-export LD_LIBRARY_PATH="$JAVA_HOME/lib:$JAVA_HOME/lib/server:/usr/local/lib:$LD_LIBRARY_PATH"
+export LD_PRELOAD=/usr/lib/libpython3.12.so
+export LD_LIBRARY_PATH="$JAVA_HOME/lib:$JAVA_HOME/lib/server:/usr/local/lib:/usr/lib:$LD_LIBRARY_PATH"
 echo "LD_LIBRARY_PATH set to: $LD_LIBRARY_PATH"
 
 # Check that at least one argument (target) is provided.
